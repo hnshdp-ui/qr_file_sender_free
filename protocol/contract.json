@@ -1,0 +1,21 @@
+{
+  "magic": "QFS1",
+  "protocol_version": 1,
+  "packet_types": {"META": 1, "DATA": 2},
+  "fec": {
+    "algorithm": "deterministic-block-fountain-gf2",
+    "block_size": 64,
+    "overhead": 4.0,
+    "mask_bits": 64
+  },
+  "qr": {
+    "symbol_size": 1200,
+    "ecc": "L",
+    "fps": 20,
+    "meta_interval": 24
+  },
+  "size_policy": {
+    "large_zip_bytes": 20971520,
+    "max_zip_bytes": 31457280
+  }
+}

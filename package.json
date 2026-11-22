@@ -1,0 +1,8 @@
+{
+  "name": "qr-file-sender-free",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/test_capture.mjs tests/test_standalone_receiver.mjs tests/test_web_protocol.mjs"
+  }
+}

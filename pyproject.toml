@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qr-file-sender-free"
+version = "0.1.0"
+description = "Send local folders as animated QR codes for offline optical transfer"
+requires-python = ">=3.10"
+dependencies = [
+  "Pillow>=10.0,<14.0",
+  "qrcode>=7.4,<9.0",
+  "zxing-cpp>=3.1,<4.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0,<9.0"]
+
+[tool.setuptools]
+packages = ["sender"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

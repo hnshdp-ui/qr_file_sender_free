@@ -1,0 +1,43 @@
+name: Deploy receiver to GitHub Pages
+
+on:
+  push:
+    paths:
+      - .github/workflows/pages.yml
+      - LICENSE
+      - scripts/build_standalone_receiver.py
+      - web/**
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages
+
+jobs:
+  deploy:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Build the standalone receiver
+        run: |
+          python3 scripts/build_standalone_receiver.py
+          install -D receiver-standalone.html dist/pages/index.html
+      - name: Upload the static page
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

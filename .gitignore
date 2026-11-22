@@ -1,0 +1,13 @@
+/.venv/
+/node_modules/
+/wheelhouse/
+/tools/
+/certs/
+/receiver-server-win10.zip
+/sender-offline-*.zip
+/qfs-diagnostics.json
+/build/
+/dist/
+*.egg-info/
+__pycache__/
+.pytest_cache/
