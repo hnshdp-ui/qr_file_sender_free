@@ -6,6 +6,7 @@ from functools import lru_cache
 from time import perf_counter
 from typing import Callable, Iterable, Optional
 
+from .config import QR_ECC
 from .playback import next_frame_deadline, parse_numbers
 from .protocol import META, parse_packet
 
@@ -14,8 +15,8 @@ def show_animated_qr(packet_stream: Iterable[bytes], title: str, fps: float,
                      status_lines: Optional[Callable[[], list[str]]] = None,
                      cycle_frames: int = 0, encoder: str = "auto",
                      source_count: int = 0, block_size: int = 64,
-                     stream_factory=None) -> None:
-    """Paused preview, stable source numbering and interruptible repair playback."""
+                     stream_factory=None, *, ecc: str = QR_ECC) -> None:
+    """Preview and replay original frames by stable source number."""
     try:
         import tkinter as tk
         from PIL import Image, ImageTk
@@ -38,14 +39,14 @@ def show_animated_qr(packet_stream: Iterable[bytes], title: str, fps: float,
     controls = tk.Frame(root, bg="white")
     controls.pack(fill="x", padx=18, pady=6)
     play_button = tk.Button(controls, text="播放", name="play")
-    play_button.pack(side="left")
+    play_button.grid(row=0, column=0)
     entry = tk.Entry(controls, width=24, name="numbers")
     entry.insert(0, "0")
-    entry.pack(side="left", padx=8)
+    entry.grid(row=0, column=1, padx=8)
     seek_button = tk.Button(controls, text="从编号播放", name="seek")
-    seek_button.pack(side="left")
+    seek_button.grid(row=0, column=2)
     repair_button = tk.Button(controls, text="仅补发列表", name="repair")
-    repair_button.pack(side="left", padx=6)
+    repair_button.grid(row=0, column=3, padx=6)
     hint = tk.Label(root, text=f"0 = 文件信息；1～{source_count} = 原始分片。列表示例：0,12,35-38",
                     bg="white", anchor="w", fg="#334155")
     hint.pack(fill="x", padx=18, pady=(0, 12))
@@ -63,7 +64,7 @@ def show_animated_qr(packet_stream: Iterable[bytes], title: str, fps: float,
 
     @lru_cache(maxsize=128)
     def encode(packet):
-        return packet_to_image(packet, box_size=1, encoder=encoder).convert("L")
+        return packet_to_image(packet, box_size=1, encoder=encoder, ecc=ecc).convert("L")
 
     def produce():
         generation = -1
@@ -80,8 +81,7 @@ def show_animated_qr(packet_stream: Iterable[bytes], title: str, fps: float,
                     packet = next(iterator)
                     kind, _, value = parse_packet(packet)
                     label = "编号 0 · 文件信息帧 META" if kind == META else (
-                        f"编号 {value.block_id * block_size + value.symbol_index + 1} · 原始分片 B{value.block_id}/S{value.symbol_index}"
-                        if value.symbol_index < value.source_count else f"补偿分片 B{value.block_id}/R{value.symbol_index}")
+                        f"编号 {value.block_id * block_size + value.symbol_index + 1} · 原始分片 B{value.block_id}/S{value.symbol_index}")
                     pending = (generation, label, encode(packet), False)
                 except StopIteration:
                     pending = (generation, "播放结束", None, True)
@@ -126,23 +126,28 @@ def show_animated_qr(packet_stream: Iterable[bytes], title: str, fps: float,
         state["next_due"] = perf_counter()
         play_button.configure(text="暂停" if state["playing"] else "播放")
 
+    def replace_stream(new_stream):
+        state["generation"] += 1
+        with lock:
+            request.update(generation=state["generation"], stream=new_stream)
+        state.update(playing=True, done=False, label="准备文件信息帧…",
+                     started=None, segment_shown=0, shown=0, next_due=perf_counter())
+        image_ref["base"] = None
+        qr_label.configure(image="")
+        play_button.configure(text="暂停")
+
     def change_mode(selected):
         try:
             numbers = parse_numbers(entry.get(), source_count)
             if not selected and len(numbers) != 1:
                 raise ValueError("从编号播放时只输入一个编号；多个编号请点“仅补发列表”")
-            new_stream = stream_factory(None if selected else numbers[0], numbers if selected else None)
+            start_number = None if selected else numbers[0]
+            new_stream = stream_factory(start_number, numbers if selected else None)
         except ValueError as exc:
             hint.configure(text=str(exc), fg="#b91c1c")
             return
-        state["generation"] += 1
-        with lock:
-            request.update(generation=state["generation"], stream=new_stream)
-        state.update(playing=True, done=False, mode="仅补发：" + entry.get() if selected else f"从编号 {numbers[0]} 播放",
-                     label="准备补发（先发送文件信息帧）…", started=None, segment_shown=0, shown=0, next_due=perf_counter())
-        image_ref["base"] = None
-        qr_label.configure(image="")
-        play_button.configure(text="暂停")
+        state["mode"] = "仅补发：" + entry.get() if selected else f"从编号 {start_number} 播放"
+        replace_stream(new_stream)
         hint.configure(text="沿用当前任务；手机保留接收进度。0 是文件信息帧。", fg="#334155")
 
     play_button.configure(command=toggle)

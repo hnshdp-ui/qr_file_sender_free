@@ -14,7 +14,7 @@ export function repairSummary(receiver) {
   }
   return {
     numbers: ranges.join(","), count: missing.length,
-    message: missing.length ? `文件信息帧 0 已收到；尚未恢复 ${missing.length} 个原始数据分片。将下方编号输入 PC，点击“仅补发列表”。也可输入其中一个编号，点击“从编号播放”。`
-      : "文件信息帧及所有原始数据均已收到或恢复，等待或已经完成校验，无需补发。",
+    message: missing.length ? `文件信息帧 0 已收到；尚缺 ${missing.length} 个原始数据分片。将下方编号输入 PC，点击“仅补发列表”。也可输入其中一个编号，点击“从编号播放”。`
+      : "文件信息帧及所有原始数据均已收到，无需补发。",
   };
 }

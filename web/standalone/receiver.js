@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const { FountainReceiver, parsePacket } = QFSProtocol;
+  const { SourceReceiver, parsePacket } = QFSProtocol;
   const { CAMERA_CONSTRAINTS, startSafeVideoFrameLoop } = QFSCamera;
   const { cameraFrameToken, shouldSkipCameraFrame, trackedQrRegion } = QFSCapture;
   const el = (id) => document.getElementById(id);
@@ -14,6 +14,8 @@
   let decodeMs = 0, attemptBaseline = 0;
   let region = null, regionMisses = 0, capturedRegion = null, frameToken = null, skippedVideoFrames = 0;
   let captureMs = 0, workerRoundTripMs = 0, forcedCaptures = 0, recentAttempts = [];
+  let captureSource = null;
+  let fallbackFrameToken = null, fallbackFrameChanged = 0;
   let loopCalls = 0, busySkips = 0, intervalSkips = 0, lastDiagnosticSample = -Infinity, diagnosticUrl = null;
   const diagnostics = [], diagnosticStarted = performance.now();
   function log(event, detail = {}) {
@@ -56,17 +58,18 @@
     const recentRate = recentAttempts.length / Math.max(0.001, Math.min(3, (now - cameraStarted) / 1000));
     el("metrics").textContent = `扫描 ${frames} 帧 · 解码 ${attempts} 次 · QR ${qrFound} 个 · QFS ${decoded} 帧` +
       (current?.meta ? ` · 有效数据 ${current.usefulSymbols}/${current.meta.sourceCount}` : "") +
-      (current?.meta ? `\n独立 DATA ${current.uniqueDataCount} · 重复 DATA ${current.duplicateCount}` : "") +
+      (current?.meta ? `\n独立 DATA ${current.usefulSymbols} · 重复 DATA ${current.duplicateCount}` : "") +
       `\n解码速度 ${((attempts - attemptBaseline) / Math.max(0.001, (now - cameraStarted) / 1000)).toFixed(1)} 次/秒 · 最近3秒 ${recentRate.toFixed(1)} 次/秒 · 最近解码 ${decodeMs.toFixed(0)} ms` +
       (current?.meta && taskStarted !== null ? ` · 有效吞吐 ${(Math.min(current.meta.fileSize, current.usefulSymbols * current.meta.symbolSize) / 1024 / Math.max(0.001, taskElapsed() / 1000)).toFixed(1)} KiB/s` : "") +
-      `\n画面 ${video.videoWidth || 0}×${video.videoHeight || 0} · readyState ${video.readyState || 0} · rAF · ${decoderState}` +
+      `\n画面 ${video.videoWidth || 0}×${video.videoHeight || 0} · readyState ${video.readyState || 0} · ${captureSource || "等待视频帧"} · ${decoderState}` +
       `\n区域 ${region ? "QR 跟踪" : "全画面"} · 解码输入 ${capturedRegion?.imageWidth || 0}×${capturedRegion?.imageHeight || 0} · 跳过重复视频帧 ${skippedVideoFrames}` +
       `\n取图 ${captureMs.toFixed(0)} ms · Worker 往返 ${workerRoundTripMs.toFixed(0)} ms · 相机报告 ${cameraSettings().frameRate ?? "未知"} FPS · 保底重采 ${forcedCaptures}` +
       (lastError ? `\n最近错误：${lastError}` : "");
     if (now - lastDiagnosticSample >= 1000) {
       lastDiagnosticSample = now;
       log("sample", { frames, attempts, qrFound, decoded, useful: current?.usefulSymbols || 0,
-        sourceCount: current?.meta?.sourceCount, recentRate, decodeMs, captureMs, workerRoundTripMs,
+        sourceCount: current?.meta?.sourceCount, symbolSize: current?.meta?.symbolSize,
+        recentRate, decodeMs, captureMs, workerRoundTripMs, captureSource,
         loopCalls, busySkips, intervalSkips, skippedVideoFrames, forcedCaptures,
         token: frameToken, mediaTime: video.currentTime, readyState: video.readyState,
         input: capturedRegion, camera: cameraSettings(), decoder: decoderState, cameraActive: Boolean(stream) });
@@ -124,10 +127,11 @@
     decodeMs = 0; attemptBaseline = 0;
     region = null; regionMisses = 0; capturedRegion = null; frameToken = null; skippedVideoFrames = 0;
     captureMs = 0; workerRoundTripMs = 0; forcedCaptures = 0; recentAttempts = [];
+    captureSource = null;
     loopCalls = 0; busySkips = 0; intervalSkips = 0;
     log("reset");
     el("result").hidden = true; el("download").removeAttribute("href");
-    receiver = new FountainReceiver(update); start.disabled = false;
+    receiver = new SourceReceiver(update); start.disabled = false;
     update(receiver); refreshTask(); status("点击“开始接收”，对准电脑动态二维码。");
   }
   function accept(binary) {
@@ -149,8 +153,8 @@
           ? parsed.data.blockId * receiver.meta.blockSize + parsed.data.symbolIndex + 1 : null,
         block: parsed.data?.blockId, symbol: parsed.data?.symbolIndex, useful: receiver.usefulSymbols,
         recovered: receiver.usefulSymbols - before });
-    } catch (error) { log("packet-error", { message: error.message }); refreshMetrics(); return false; }
-    refreshMetrics(); return true;
+    } catch (error) { log("packet-error", { message: error.message }); return false; }
+    return true;
   }
   function decodedResult(data) {
     const valid = accept(data.binary);
@@ -161,16 +165,29 @@
       region = null; regionMisses = 0;
     }
   }
-  function frame() {
+  function frame(source, presentedFrames) {
     const now = performance.now();
     loopCalls += 1;
     if (!stream || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
     if (busy && now - busySince > 2500) dropWorker("主线程（Worker 响应超时）");
     if (busy || (worker && !workerReady)) { busySkips += 1; return; }
-    if (now - lastScan < 40) { intervalSkips += 1; return; }
-    const token = cameraFrameToken(video);
-    if (shouldSkipCameraFrame(token, frameToken, now - lastScan)) { skippedVideoFrames += 1; return; }
-    if (token !== null && token === frameToken) forcedCaptures += 1;
+    let token = source === "rVFC" ? `presented:${presentedFrames}` : cameraFrameToken(video);
+    if (source === "rAF") {
+      const elapsed = now - lastScan;
+      if (token?.startsWith("frame:")) {
+        if (token !== fallbackFrameToken) {
+          fallbackFrameToken = token;
+          fallbackFrameChanged = now;
+        } else if (now - fallbackFrameChanged >= 80 && Number.isFinite(video.currentTime)) {
+          token = `time:${video.currentTime}`;
+        }
+      }
+      // Without a frame counter, currentTime can advance at the display rate.
+      if (!token?.startsWith("frame:") && elapsed < 25) { intervalSkips += 1; return; }
+      if (shouldSkipCameraFrame(token, frameToken, elapsed)) { skippedVideoFrames += 1; return; }
+      if (token !== null && token === frameToken) forcedCaptures += 1;
+    }
+    captureSource = source;
     frameToken = token;
     lastScan = now;
     if (region?.sourceWidth !== video.videoWidth || region?.sourceHeight !== video.videoHeight) region = null;
@@ -248,11 +265,10 @@
       if (ticket !== generation) return;
       initWorker(); stop.hidden = false;
       cameraStarted = performance.now(); lastScan = -Infinity;
-      frameToken = null; region = null; regionMisses = 0;
+      frameToken = null; captureSource = null; fallbackFrameToken = null; region = null; regionMisses = 0;
       attemptBaseline = attempts;
       recentAttempts = [];
       status("摄像头已开启，正在等待 QFS1 二维码…");
-      // Use the broadly supported rAF loop; do not depend on video-frame callbacks.
       stopLoop = startSafeVideoFrameLoop(video, frame);
       metricTimer = setInterval(refreshMetrics, 500);
       refreshMetrics();
@@ -266,7 +282,7 @@
   el("export-log").addEventListener("click", () => {
     log("export");
     if (diagnosticUrl) URL.revokeObjectURL(diagnosticUrl);
-    const report = { version: "v20261103.2", exportedAt: new Date().toISOString(),
+    const report = { version: "v20261122.1", exportedAt: new Date().toISOString(),
       userAgent: navigator.userAgent || "", maxEntries: 6000, events: diagnostics.slice() };
     diagnosticUrl = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
     el("export-log").href = diagnosticUrl;

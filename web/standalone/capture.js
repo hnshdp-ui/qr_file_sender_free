@@ -4,7 +4,7 @@ export function cameraFrameToken(video) {
   let count;
   try { count = video.getVideoPlaybackQuality?.()?.totalVideoFrames; } catch (_) { /* Use media time below. */ }
   if (Number.isFinite(count) && count > 0) {
-    return `frame:${count}` + (Number.isFinite(video.currentTime) ? `|time:${video.currentTime}` : "");
+    return `frame:${count}`;
   }
   return Number.isFinite(video.currentTime) ? `time:${video.currentTime}` : null;
 }

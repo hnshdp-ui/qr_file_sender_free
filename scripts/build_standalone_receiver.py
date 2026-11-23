@@ -23,7 +23,7 @@ def build():
     worker += "\n" + (ROOT / "web/standalone/decoder-worker.js").read_text(encoding="utf-8")
     scripts = [
         decoder,
-        inline_module("web/protocol.js", "QFSProtocol", "FountainReceiver, parsePacket"),
+        inline_module("web/protocol.js", "QFSProtocol", "SourceReceiver, parsePacket"),
         inline_module("web/optical-pipeline.js", "QFSCamera", "CAMERA_CONSTRAINTS, startSafeVideoFrameLoop"),
         inline_module("web/standalone/capture.js", "QFSCapture", "cameraFrameToken, shouldSkipCameraFrame, trackedQrRegion"),
         inline_module("web/standalone/repair.js", "QFSRepair", "repairSummary"),

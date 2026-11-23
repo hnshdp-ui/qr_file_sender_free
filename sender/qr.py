@@ -5,6 +5,10 @@ from typing import Any
 from .config import QR_ECC
 
 
+# Data codewords in a version 40 QR symbol, excluding error correction.
+_QR_DATA_CODEWORDS = {"L": 2956, "M": 2334, "Q": 1666, "H": 1276}
+
+
 def select_encoder(requested: str = "auto") -> str:
     if requested not in ("auto", "zxing", "qrcode"):
         raise ValueError("QR encoder must be auto, zxing, or qrcode")
@@ -18,6 +22,13 @@ def select_encoder(requested: str = "auto") -> str:
             if requested == "zxing":
                 raise RuntimeError("Native QR encoding requires zxing-cpp; run setup_sender.cmd") from exc
     return "qrcode"
+
+
+def max_binary_packet_size(ecc: str, encoder: str) -> int:
+    # Byte mode needs 4 mode bits and a 16-bit length. ZXing also adds a
+    # 20-bit ECI designator for binary input.
+    overhead = 5 if select_encoder(encoder) == "zxing" else 3
+    return _QR_DATA_CODEWORDS[ecc.upper()] - overhead
 
 
 def _native_image(packet: bytes, box_size: int, border: int, ecc: str):

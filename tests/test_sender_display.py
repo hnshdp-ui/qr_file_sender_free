@@ -3,7 +3,7 @@ import pytest
 tk = pytest.importorskip("tkinter")
 
 from sender.display import show_animated_qr
-from sender.protocol import TransferMetadata, encode_meta
+from sender.protocol import TransferMetadata, encode_meta, split_source_symbols
 
 
 def test_window_can_resize_and_reports_cycle_progress(monkeypatch):
@@ -13,7 +13,7 @@ def test_window_can_resize_and_reports_cycle_progress(monkeypatch):
         pytest.skip("A desktop display is required for the window-resize integration test")
     monkeypatch.setattr(tk, "Tk", lambda: root)
     observed = []
-    packet = encode_meta(TransferMetadata.new("display.zip", 42, 1200, 1, 4, 64))
+    packet = encode_meta(TransferMetadata.new("display.zip", 42, 1200, 1, 64))
 
     def resize():
         root.geometry("500x600")
@@ -48,14 +48,13 @@ def test_window_can_resize_and_reports_cycle_progress(monkeypatch):
 
 def test_play_pause_and_seek_discard_old_queued_frames(monkeypatch):
     from sender.cli import _stream
-    from sender.fec import encode_symbols
     try:
         root = tk.Tk()
     except tk.TclError:
         pytest.skip("A desktop display is required")
     monkeypatch.setattr(tk, "Tk", lambda: root)
-    records, count, total = encode_symbols(b"abcdefgh", 1, block_size=2)
-    meta = TransferMetadata.new("seek.zip", 8, 1, count, total, 2)
+    records = split_source_symbols(b"abcdefgh", 1, block_size=2)
+    meta = TransferMetadata.new("seek.zip", 8, 1, len(records), 2)
     observed, callback_errors = [], []
     root.report_callback_exception = lambda *args: callback_errors.append(args)
 
@@ -79,7 +78,7 @@ def test_play_pause_and_seek_discard_old_queued_frames(monkeypatch):
     root.after(1050, snapshot)
     root.after(1200, root.destroy)
     show_animated_qr(_stream(meta, records, 24), "QFS controls test", 8,
-                     source_count=count, block_size=2,
+                     source_count=len(records), block_size=2,
                      stream_factory=lambda start, selected: _stream(meta, records, 24, start, selected))
     assert not callback_errors
     assert observed[0].split("Actual:")[0] == observed[1].split("Actual:")[0]

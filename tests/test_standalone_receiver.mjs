@@ -67,10 +67,7 @@ test("repair numbers cover missing META and sources, and selected replay complet
   await ui.element("start").listeners.click();
   const parse = vm.runInContext("QFSProtocol.parsePacket", ui.context);
   const meta = packets.find((packet) => parse(packet).meta);
-  const sources = packets.filter((packet) => {
-    const p = parse(packet);
-    return p.data && p.data.symbolIndex < p.data.sourceCount;
-  }).sort((a, b) => parse(a).data.symbolIndex - parse(b).data.symbolIndex);
+  const sources = packets.filter((packet) => parse(packet).data);
   const feed = (binary) => ui.workers[0].onmessage({ data: { binary } });
   feed(sources[0]);
   assert.equal(ui.element("missing-numbers").value, "0");
@@ -116,15 +113,45 @@ test("live scan counters update even when the worker finds no QR", async () => {
   assert.match(ui.element("metrics").textContent, /320×180/);
 });
 
-test("same camera frame is not decoded repeatedly and fresh frames can scan within 80 ms", async () => {
+test("fallback ignores repeated camera frames and can scan fresh frames 33 ms apart", async () => {
   const ui = page(); await ui.element("start").listeners.click();
   const worker = ui.workers[0]; worker.onmessage({ data: { ready: true } });
   ui.nextFrame(); worker.onmessage({ data: { binary: null } });
-  ui.nextFrame(false, 50); ui.tickMetrics();
+  ui.nextFrame(false, 30); ui.tickMetrics();
   assert.match(ui.element("metrics").textContent, /扫描 1 帧/);
   assert.match(ui.element("metrics").textContent, /跳过重复视频帧 1/);
-  ui.nextFrame(true, 50); worker.onmessage({ data: { binary: null } }); ui.tickMetrics();
+  ui.nextFrame(true, 33); worker.onmessage({ data: { binary: null } }); ui.tickMetrics();
   assert.match(ui.element("metrics").textContent, /扫描 2 帧/);
+});
+
+test("video callbacks scan consecutive 30 FPS frames and stop with the camera", async () => {
+  const ui = page(), video = ui.element("camera");
+  let callback, frameId = 0;
+  video.requestVideoFrameCallback = (next) => { callback = next; return ++frameId; };
+  video.cancelVideoFrameCallback = (id) => { assert.equal(id, frameId); callback = undefined; };
+  await ui.element("start").listeners.click();
+  const worker = ui.workers[0]; worker.onmessage({ data: { ready: true } });
+  for (let index = 1; index <= 30; index += 1) {
+    ui.advance(1000 / 30);
+    callback(index * 1000 / 30, { presentedFrames: index });
+    worker.onmessage({ data: { binary: null } });
+  }
+  ui.tickMetrics();
+  assert.match(ui.element("metrics").textContent, /扫描 30 帧/);
+  assert.match(ui.element("metrics").textContent, /rVFC/);
+  ui.element("stop").listeners.click();
+  assert.equal(callback, undefined);
+});
+
+test("a stalled video callback switches to the animation-frame fallback", async () => {
+  const ui = page(), video = ui.element("camera");
+  video.requestVideoFrameCallback = () => 1;
+  await ui.element("start").listeners.click();
+  ui.workers[0].onmessage({ data: { ready: true } });
+  ui.advance(250); ui.expireWorker();
+  ui.nextFrame(); ui.tickMetrics();
+  assert.match(ui.element("metrics").textContent, /扫描 1 帧/);
+  assert.match(ui.element("metrics").textContent, /rAF/);
 });
 
 test("a frozen counter and clock still capture at least 10 times per second", async () => {
@@ -141,6 +168,19 @@ test("a frozen counter and clock still capture at least 10 times per second", as
   assert.match(ui.element("metrics").textContent, /保底重采/);
 });
 
+test("fallback uses an advancing clock when the video frame counter freezes", async () => {
+  const ui = page(); await ui.element("start").listeners.click();
+  const worker = ui.workers[0]; worker.onmessage({ data: { ready: true } });
+  ui.element("camera").getVideoPlaybackQuality = () => ({ totalVideoFrames: 7 });
+  for (let i = 0; i < 60; i += 1) {
+    ui.nextFrame(true, 1000 / 60);
+    worker.onmessage({ data: { binary: null } });
+  }
+  ui.tickMetrics();
+  const attempts = Number(ui.element("metrics").textContent.match(/解码 (\d+) 次/)[1]);
+  assert.ok(attempts >= 27 && attempts <= 30, `attempts=${attempts}`);
+});
+
 test("diagnostic export records scan gates, worker delay and packet numbers without file contents", async () => {
   const ui = page(), { packets } = makePackets();
   await ui.element("start").listeners.click();
@@ -155,8 +195,9 @@ test("diagnostic export records scan gates, worker delay and packet numbers with
   ui.element("export-log").listeners.click();
   const blob = ui.blobs.get(ui.element("export-log").href);
   const report = JSON.parse(await blob.text());
-  assert.equal(report.version, "v20261103.2");
-  assert.ok(report.events.some((event) => event.event === "sample" && event.busySkips > 0));
+  assert.equal(report.version, "v20261122.1");
+  assert.ok(report.events.some((event) => event.event === "sample" && event.busySkips > 0 &&
+    event.captureSource === "rAF" && event.symbolSize > 0));
   assert.ok(report.events.some((event) => event.event === "packet" && event.sourceNumber === 0));
   assert.ok(report.events.some((event) => event.event === "packet" && event.sourceNumber === 1));
   assert.doesNotMatch(await blob.text(), /测试\.zip|"payload"|"binary"/);

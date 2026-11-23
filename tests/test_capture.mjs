@@ -6,16 +6,16 @@ import { cameraFrameToken, shouldSkipCameraFrame, trackedQrRegion } from "../web
 import { receiverFixture } from "./receiver_fixtures.mjs";
 
 test("frame identity prefers decoded video-frame counters and handles unavailable quality APIs", () => {
-  assert.equal(cameraFrameToken({ getVideoPlaybackQuality: () => ({ totalVideoFrames: 7 }), currentTime: 3 }), "frame:7|time:3");
+  assert.equal(cameraFrameToken({ getVideoPlaybackQuality: () => ({ totalVideoFrames: 7 }), currentTime: 3 }), "frame:7");
   assert.equal(cameraFrameToken({ getVideoPlaybackQuality: () => { throw new Error(); }, currentTime: 3 }), "time:3");
   assert.equal(cameraFrameToken({}), null);
 });
 
-test("stalled frame counters cannot suppress advancing media time or block scanning indefinitely", () => {
+test("an advancing clock does not turn a repeated frame into a fresh frame", () => {
   const video = { getVideoPlaybackQuality: () => ({ totalVideoFrames: 7 }), currentTime: 3 };
   const token = cameraFrameToken(video);
   video.currentTime = 3.04;
-  assert.notEqual(cameraFrameToken(video), token);
+  assert.equal(cameraFrameToken(video), token);
   assert.equal(shouldSkipCameraFrame(token, token, 50), true);
   assert.equal(shouldSkipCameraFrame(token, token, 80), false);
   assert.equal(shouldSkipCameraFrame(null, null, 50), false);
