@@ -8,10 +8,16 @@
 
 ## 发送端
 
-Windows 安装 Python 3.10+（含 Tkinter），在项目目录运行：
+Windows 发送端需要 Python 3.10+（含 pip 和 Tkinter）。首次使用时按以下步骤准备：
+
+1. 在联网电脑上解压项目，运行 `setup_sender.cmd`。脚本会把依赖下载到项目内的 `wheelhouse`。
+2. 把项目连同 `wheelhouse` 复制到离线电脑。如果项目里已有 `.venv`，复制时跳过它。
+3. 离线电脑使用与联网电脑相同主次版本和架构的 Python，例如两台都用 Python 3.12 x64。已有兼容的 Python 可以直接使用。
+4. 双击离线电脑上的 `run_sender.cmd`，按提示输入待传文件夹路径。首次运行会在本机创建 `.venv` 并从 `wheelhouse` 安装依赖，后续运行直接使用本机已安装的依赖。
+
+也可以直接传入文件夹路径和播放参数：
 
 ```powershell
-.\setup_sender.cmd
 .\run_sender.cmd "F:\qr_file_sender_free\testFile" --fps 15 --symbol-size 2899 --qr-ecc L
 ```
 
