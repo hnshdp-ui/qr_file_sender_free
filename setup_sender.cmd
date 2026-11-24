@@ -37,10 +37,8 @@ if errorlevel 1 (
   echo Rename .venv, then run this script again to create a new environment.
   goto setup_error
 )
-if defined PIP_NO_INDEX goto install_dependencies
 ".venv\Scripts\python.exe" -m pip install --upgrade pip
 if errorlevel 1 goto setup_error
-:install_dependencies
 ".venv\Scripts\python.exe" -m pip install --only-binary=Pillow,zxing-cpp -r requirements.txt
 if errorlevel 1 goto setup_error
 ".venv\Scripts\python.exe" -c "import tkinter; from PIL import Image, ImageTk; import qrcode, zxingcpp; print('Sender dependencies are ready: ZXing-C++ native encoder.')"

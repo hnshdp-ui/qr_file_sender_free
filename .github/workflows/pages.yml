@@ -31,9 +31,7 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Build the standalone receiver
-        run: |
-          python3 scripts/build_standalone_receiver.py
-          install -D receiver-standalone.html dist/pages/index.html
+        run: python3 scripts/build_standalone_receiver.py
       - name: Upload the static page
         uses: actions/upload-pages-artifact@v4
         with:

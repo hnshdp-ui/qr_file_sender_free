@@ -15,7 +15,7 @@ def inline_module(path, namespace, names):
     return f"const {namespace} = (() => {{\n{source}\nreturn {{{names}}};\n}})();"
 
 
-def build():
+def build(output=ROOT / "dist/pages/index.html"):
     decoder = (ROOT / "web/vendor/jsqr.js").read_text(encoding="utf-8")
     wasm = base64.b64encode((ROOT / "web/vendor/zxing_reader.wasm").read_bytes()).decode("ascii")
     worker = "const QFS_WASM_BASE64 = " + json.dumps(wasm) + ";\n"
@@ -42,7 +42,7 @@ def build():
     ]
     notice = "\n".join(licenses).replace("-->", "--&gt;")
     template = template.replace("<!doctype html>", f"<!doctype html>\n<!--\n{notice}\n-->")
-    output = ROOT / "receiver-standalone.html"
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(template.replace("<!-- INLINE_RECEIVER -->", "<script>\n" + script + "\n</script>"),
                       encoding="utf-8", newline="\n")
     print(f"Built {output} ({output.stat().st_size:,} bytes)")

@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { test } from "node:test";
 import { startEmbeddedWorker } from "./standalone_worker_harness.mjs";
-import { receiverFixture } from "./receiver_fixtures.mjs";
+import { receiverFixture, runTestPython } from "./receiver_fixtures.mjs";
 
-const html = fs.readFileSync(new URL("../receiver-standalone.html", import.meta.url), "utf8");
+runTestPython(["scripts/build_standalone_receiver.py"]);
+const html = fs.readFileSync(new URL("../dist/pages/index.html", import.meta.url), "utf8");
 const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)[1];
 
 function page({ camera = true, protocol = "https:" } = {}) {
@@ -19,7 +20,7 @@ function page({ camera = true, protocol = "https:" } = {}) {
       removeAttribute(name) { delete this[name]; },
       async play() {},
       readyState: 4, videoWidth: 320, videoHeight: 180, currentTime: 0,
-      requestVideoFrameCallback() { throw new Error("Safari video-frame callbacks must not be required"); },
+      requestVideoFrameCallback() { throw new Error("Video-frame callbacks must not be required"); },
       getContext() { return { drawImage() {}, getImageData(_x, _y, width, height) { return { width, height, data: new Uint8ClampedArray(width * height * 4) }; } }; },
     });
     return elements.get(id);
@@ -92,11 +93,12 @@ test("standalone HTML includes executable classic scripts without external resou
   new vm.Script(script);
 });
 
-test("local or unsupported viewer shows a useful camera error", async () => {
-  const ui = page({ camera: false, protocol: "file:" });
+test("insecure pages point users to the GitHub Pages receiver", async () => {
+  const ui = page({ camera: false, protocol: "http:" });
   assert.equal(ui.element("environment").hidden, false);
+  assert.match(ui.element("environment").textContent, /GitHub Pages/);
   await ui.element("start").listeners.click();
-  assert.match(ui.element("status").textContent, /HTTPS/);
+  assert.match(ui.element("status").textContent, /GitHub Pages.*HTTPS/);
   assert.equal(ui.element("result").hidden, true);
 });
 
@@ -259,7 +261,7 @@ test("camera frame errors are visible and do not terminate the scan loop", async
 });
 
 test("embedded WASM initializes without network and returns a no-QR result", async () => {
-  const worker = await startEmbeddedWorker();
+  const worker = await startEmbeddedWorker(html);
   assert.equal(worker.ready.decoder, "ZXING-WASM");
   const result = await worker.send({ pixels: new Uint8ClampedArray(16 * 16 * 4), width: 16, height: 16 });
   assert.equal(result.binary, null);
@@ -267,7 +269,7 @@ test("embedded WASM initializes without network and returns a no-QR result", asy
 });
 
 test("blocked WebAssembly initializes the jsQR worker fallback", async () => {
-  const worker = await startEmbeddedWorker({ disableWasm: true });
+  const worker = await startEmbeddedWorker(html, { disableWasm: true });
   assert.equal(worker.ready.decoder, "JSQR");
   assert.ok(worker.ready.fallbackReason);
   const result = await worker.send({ pixels: new Uint8ClampedArray(16 * 16 * 4), width: 16, height: 16 });
@@ -276,7 +278,7 @@ test("blocked WebAssembly initializes the jsQR worker fallback", async () => {
 });
 
 test("a WASM decode failure falls back to jsQR without resetting the transfer", async () => {
-  const worker = await startEmbeddedWorker();
+  const worker = await startEmbeddedWorker(html);
   worker.context.ZXingWASM.readBarcodes = async () => { throw new Error("simulated WASM failure"); };
   const result = await worker.send({ pixels: new Uint8ClampedArray(16 * 16 * 4), width: 16, height: 16 });
   assert.equal(result.binary, null);

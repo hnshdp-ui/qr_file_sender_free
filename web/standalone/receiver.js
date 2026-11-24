@@ -80,7 +80,7 @@
     el("missing-numbers").value = repair.numbers;
     el("copy-missing").disabled = !repair.numbers;
     if (stream && !frames && performance.now() - cameraStarted > 3000) {
-      status("摄像头已授权，但尚未取得可解码画面。请确认预览在变化，并保持 Safari 在前台。");
+      status("摄像头已授权，但尚未取得可解码画面。请确认预览在变化，并保持接收页在前台。");
     }
   }
   function pause() {
@@ -251,7 +251,7 @@
   async function begin() {
     if (starting || stream || completedFile) return;
     if (!navigator.mediaDevices?.getUserMedia || !globalThis.crypto?.subtle) {
-      status("当前环境无法使用摄像头或 SHA-256。离线使用请在手机本机启动服务，再用 Safari 打开 http://127.0.0.1:8000/receiver-standalone.html；也支持可信 HTTPS 来源。附件预览可能不支持。"); return;
+      status("当前浏览器环境无法使用摄像头或 SHA-256。请使用支持这两项功能的手机浏览器打开 GitHub Pages 的 HTTPS 接收页。"); return;
     }
     starting = true; start.disabled = true;
     const ticket = ++generation;
@@ -273,7 +273,7 @@
       metricTimer = setInterval(refreshMetrics, 500);
       refreshMetrics();
     } catch (error) {
-      if (ticket === generation) { pause(); status(`无法开启摄像头：${error.message}。请检查 Safari 摄像头权限，并通过手机本机 127.0.0.1 或可信 HTTPS 来源打开。`); }
+      if (ticket === generation) { pause(); status(`无法开启摄像头：${error.message}。请检查浏览器和此网站的摄像头权限。`); }
     } finally { if (ticket === generation) { starting = false; start.disabled = false; } }
   }
   start.addEventListener("click", begin);
@@ -291,7 +291,7 @@
     const field = el("missing-numbers");
     try {
       await navigator.clipboard.writeText(field.value);
-      el("copy-status").textContent = "已复制。请手工输入断网 PC，或在可用的本地方式中保存这些编号。";
+      el("copy-status").textContent = "已复制。请将编号填入电脑的发送窗口。";
     } catch (_) {
       field.focus(); field.select();
       el("copy-status").textContent = "请长按编号复制，或直接照着输入 PC。";
@@ -305,8 +305,8 @@
   globalThis.addEventListener("pagehide", pause);
   globalThis.addEventListener("unhandledrejection", () => { pause(); status("接收或校验出现异常，请重新接收。尚未提供未经校验的文件。"); });
   reset();
-  if (location.protocol === "file:" || !globalThis.isSecureContext) {
+  if (location.protocol !== "https:" || !globalThis.isSecureContext) {
     el("environment").hidden = false;
-    el("environment").textContent = "当前为本地文件或非安全来源。iPhone 附件预览可能无法调用摄像头；离线使用请在手机本机启动服务，通过 Safari 打开 http://127.0.0.1:8000/receiver-standalone.html。";
+    el("environment").textContent = "请在手机浏览器中打开 GitHub Pages 的 HTTPS 接收页，以便使用摄像头。";
   }
 })();

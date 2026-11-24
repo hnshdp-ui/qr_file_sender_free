@@ -2,9 +2,18 @@ import pytest
 import base64
 import json
 import subprocess
+from pathlib import Path
 
+from scripts.build_standalone_receiver import build
 from sender.protocol import SourceSymbol, TransferMetadata, encode_data, encode_meta, parse_packet
 from sender.qr import packet_to_image
+
+
+@pytest.fixture(scope="module")
+def receiver_page(tmp_path_factory):
+    output = tmp_path_factory.mktemp("pages") / "index.html"
+    build(output)
+    return output
 
 
 def test_qr_encoder_accepts_binary_packet():
@@ -43,7 +52,7 @@ def test_qr_image_roundtrip_through_vendored_jsqr(zero_payload, encoder):
 @pytest.mark.parametrize("size", [1200, 1800, 2400])
 @pytest.mark.parametrize("disable_wasm", [False, True])
 @pytest.mark.parametrize("zero_payload", [False, True])
-def test_native_encoder_roundtrips_through_embedded_receiver(size, disable_wasm, zero_payload):
+def test_native_encoder_roundtrips_through_embedded_receiver(size, disable_wasm, zero_payload, receiver_page):
     from sender.qr import select_encoder
 
     assert select_encoder() == "zxing"
@@ -53,7 +62,8 @@ def test_native_encoder_roundtrips_through_embedded_receiver(size, disable_wasm,
     request = json.dumps({"width": image.width, "height": image.height,
                           "rgba": base64.b64encode(image.tobytes()).decode(),
                           "disableWasm": disable_wasm})
-    result = subprocess.run(["node", str(__file__).replace("test_qr_integration.py", "decode_standalone_worker.mjs")],
+    decoder = Path(__file__).with_name("decode_standalone_worker.mjs")
+    result = subprocess.run(["node", str(decoder), str(receiver_page)],
                             input=request, text=True, capture_output=True, check=True)
     decoded = json.loads(result.stdout)
     assert base64.b64decode(decoded["binary"]) == packet

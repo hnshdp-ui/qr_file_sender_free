@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; worker-src blob:; media-src blob:; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
-<title>二维码文件接收 · 无广告版</title>
+<title>二维码文件接收</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f2f5f3;color:#162d25;font:16px/1.6 system-ui,-apple-system,sans-serif}main{max-width:700px;margin:auto;padding:24px 18px 60px}h1{font-size:26px;margin-bottom:4px}.muted{color:#50645b}section{background:white;padding:20px;border:1px solid #d4dfd8;border-radius:18px;margin:18px 0}video{display:block;width:100%;max-height:52vh;background:#10251d;border-radius:12px;object-fit:contain}button,.button{display:inline-block;border:0;border-radius:10px;padding:12px 18px;font:inherit;background:#186b50;color:white;text-decoration:none;cursor:pointer;margin:8px 6px 0 0}.secondary{background:#e7efea;color:#163e2e}button:disabled{opacity:.5;cursor:default}[hidden]{display:none!important}progress{width:100%;height:22px;accent-color:#186b50}#status{white-space:pre-wrap;overflow-wrap:anywhere}#environment{padding:12px;background:#fff4d8;border-radius:10px}details{font-size:14px}summary{cursor:pointer}a{color:#176449}small{overflow-wrap:anywhere}
 </style>
 </head>
 <body><main>
 <h1>二维码文件接收</h1>
-<p class="muted">单文件无广告版 · 默认 ZXing-C++ WASM 解码 · v20261122.1</p>
+<p class="muted">单文件· 默认 ZXing-C++ WASM 解码 · v20261122.1</p>
 <p id="environment" hidden></p>
 <section>
 <video id="camera" playsinline muted hidden></video><canvas id="frame" hidden></canvas>
@@ -25,17 +25,14 @@
 <p class="muted">0 = 文件信息帧；1～N = 原始数据分片。将缺失编号输入 PC 后点击“仅补发列表”。补发期间请保留本页和 PC 当前任务。</p></details>
 <button id="start">开始接收</button><button id="stop" class="secondary" hidden>暂停摄像头</button><button id="reset" class="secondary">重新接收</button>
 <a id="export-log" class="button secondary" href="#" download="qfs-diagnostics.json">导出诊断日志</a>
-<p class="muted">日志保留最近 6000 条性能及分片编号记录，不包含文件内容，仅保存在本页，点击导出后可存到“文件”。</p>
-<div id="result" hidden><p id="verified"></p><a id="download" class="button">下载 ZIP</a><button id="share" class="secondary" hidden>分享 / 存储到“文件”</button></div>
+<p class="muted">日志在本页保留最近 6000 条性能及分片编号记录，不包含文件内容，可导出为 JSON 文件。</p>
+<div id="result" hidden><p id="verified"></p><a id="download" class="button">下载 ZIP</a><button id="share" class="secondary" hidden>分享 ZIP</button></div>
 </section>
-<section><details><summary>iPhone 使用说明与本地打开限制</summary>
-<p>所有脚本和解码库都已包含在此文件中。页面不加载广告，不发送文件数据，也不请求网络资源。</p>
-<p>局域网使用：在 Safari 打开接收服务器的 HTTPS 地址。接收页加载完成后，扫码、文件还原、校验和保存都在手机上进行。</p>
-<p>离线使用：事先把本文件保存到 iPhone，并准备能运行 Python 的本地工具（如 a-Shell）。在文件所在目录执行 <code>python3 -m http.server 8000 --bind 127.0.0.1</code>，再用本机 Safari 打开 <code>http://127.0.0.1:8000/receiver-standalone.html</code>。此地址指向手机自身，不需要 Wi-Fi、移动数据或连接电脑。运行工具需提前安装。</p>
-<p>文件 App、微信、邮件的 HTML 预览不等于 Safari 网页，可能无法执行脚本或调用摄像头。普通的 http://电脑IP 地址通常无法使用摄像头。若无法运行本地工具，需另行准备离线 Web App 或原生接收 App。</p>
-<p>接收完成并通过 SHA-256 校验后，点击下载 ZIP；若 Safari 提供分享功能，可选择“存储到文件”。刷新或关闭页面会丢失当前接收进度。暂停摄像头会保留本页进度。</p>
+<section><details><summary>手机接收说明</summary>
+<p>请用手机浏览器打开 GitHub Pages 的 HTTPS 接收页，例如 Android 上的 Chrome 或 iPhone 上的 Safari。扫码、文件还原和校验均在手机上完成。</p>
+<p>接收完成并通过 SHA-256 校验后，点击“下载 ZIP”保存文件。浏览器支持文件分享时，还会显示“分享 ZIP”。刷新或关闭页面会丢失当前接收进度。暂停摄像头会保留本页进度。</p>
 <p>建议电脑先使用 <code>run_sender.cmd "文件夹路径" --fps 8</code>。接收稳定后再逐步提高帧率。</p>
 <p>本页复用 QFS1 协议、ZXing-WASM 3.1.2（MIT）、ZXing-C++（Apache 2.0）及其 Zint 组件（BSD-3-Clause），并保留 jsQR 1.4.0（Apache 2.0）回退。项目代码使用 MIT License。</p>
 </details></section>
-<noscript><p>当前查看器没有运行 JavaScript，无法扫码接收。请通过可信 HTTPS 地址在 Safari 中打开本文件。</p></noscript>
+<noscript><p>扫码接收需要 JavaScript。请在浏览器中启用 JavaScript，再打开 GitHub Pages 接收页。</p></noscript>
 </main><!-- INLINE_RECEIVER --></body></html>
